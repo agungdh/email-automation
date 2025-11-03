@@ -7,13 +7,11 @@ import org.springframework.stereotype.Service;
 
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 
 @Service
 public class EmailService {
-
     private final Gmail gmail;
     private static final String USER = "me";
 
@@ -21,23 +19,27 @@ public class EmailService {
         this.gmail = gmail;
     }
 
-    /** Ambil email persis 24 jam terakhir, mengikuti timezone sistem (default JVM). */
-    public List<EmailDto> getLast24hEmails() throws Exception {
-        // cutoff 24 jam (presisi millisecond, timezone sistem)
-        Instant now = Instant.now();
-        long cutoffMs = now.minusSeconds(24 * 60 * 60).toEpochMilli();
+    /** 24 jam terakhir dengan filter label tertentu (nama label apa adanya, termasuk yang diawali '+'). */
+    public List<EmailDto> getLast24hEmailsByLabel(String labelName) throws Exception {
+        // cutoff presisi 24 jam
+        long cutoffMs = Instant.now().minusSeconds(24 * 60 * 60).toEpochMilli();
 
-        // Query kasar untuk menyempitkan hasil: pakai tanggal kemarin (berdasarkan timezone sistem)
-        // NOTE: after: di Gmail pakai granularity hari, jadi kita tetap filter presisi pakai internalDate di bawah.
-        LocalDate yesterday = LocalDate.now().minusDays(1);
-        String afterStr = yesterday.format(DateTimeFormatter.ofPattern("yyyy/MM/dd"));
-        String q = "after:" + afterStr;
+        // ===== Query Gmail =====
+        // 1) label:"<nama>"  --> karena label bisa mengandung '+', spasi, dsb (WAJIB pakai kutip)
+        // 2) newer_than:1d   --> perkecil hasil
+        // 3) (opsional tambahan) after:YYYY/MM/DD untuk mengurangi page kalau mailbox sangat besar
+        String quotedLabel = "\"" + labelName + "\"";
+        String q = "label:" + quotedLabel + " newer_than:1d";
+
+        // (opsional) tambah after: kemarin untuk penyempitan ekstra
+        String afterStr = LocalDate.now().minusDays(1).format(DateTimeFormatter.ofPattern("yyyy/MM/dd"));
+        q += " after:" + afterStr;
 
         Map<String, String> labelMap = fetchLabelMap();
 
         // paging list message IDs
         List<String> ids = new ArrayList<>();
-        Gmail.Users.Messages.List req = gmail.users().messages().list(USER).setQ(q);
+        Gmail.Users.Messages.List req = gmail.users().messages().list(USER).setQ(q).setMaxResults(100L);
         ListMessagesResponse res;
         do {
             res = req.execute();
@@ -47,19 +49,17 @@ public class EmailService {
             req.setPageToken(res.getNextPageToken());
         } while (res.getNextPageToken() != null && !res.getNextPageToken().isEmpty());
 
+        // ambil metadata Subject + internalDate + labelIds → DTO
         List<EmailDto> out = new ArrayList<>();
         for (String id : ids) {
-            // Ambil metadata Subject + internalDate
             Message msg = gmail.users().messages()
                     .get(USER, id)
                     .setFormat("metadata")
                     .setMetadataHeaders(List.of("Subject"))
                     .execute();
 
-            Long internalDate = msg.getInternalDate(); // epoch millis (UTC)
-            if (internalDate == null || internalDate < cutoffMs) {
-                continue; // buang yang lebih tua dari 24 jam
-            }
+            long internalDate = msg.getInternalDate() != null ? msg.getInternalDate() : 0L;
+            if (internalDate < cutoffMs) continue; // pastikan benar2 ≤ 24 jam
 
             String subject = "(no subject)";
             if (msg.getPayload() != null && msg.getPayload().getHeaders() != null) {
@@ -76,11 +76,11 @@ public class EmailService {
                 }
             }
 
-            out.add(new EmailDto(id, subject, labels));
+            out.add(new EmailDto(id, subject, labels, internalDate));
         }
 
-        // (opsional) urutkan terbaru dulu
-        out.sort(Comparator.comparing(EmailDto::id).reversed());
+        // urutkan terbaru dulu (berdasarkan internalDate)
+        out.sort(Comparator.comparingLong(EmailDto::internalDateMs).reversed());
         return out;
     }
 
