@@ -9,15 +9,22 @@ import java.util.List;
 
 @RestController
 public class EmailController {
+
     private final EmailService emailService;
 
     public EmailController(EmailService emailService) {
         this.emailService = emailService;
     }
 
-    /** Ambil SEMUA email 24 jam terakhir + kembalikan labels & plus-tags (jika ada). */
+    /** Semua email 24 jam terakhir (ikut timezone sistem) + labels & plusTags. */
     @GetMapping("/api/emails/last-24h")
     public List<EmailDto> last24hAll() throws Exception {
         return emailService.getLast24hAllEmails();
+    }
+
+    /** Hanya email 24 jam terakhir yang punya plus-tag (nama+tag@domain). */
+    @GetMapping("/api/emails/last-24h/with-plus")
+    public List<EmailDto> last24hWithPlus() throws Exception {
+        return emailService.getLast24hEmailsWithPlusOnly();
     }
 }

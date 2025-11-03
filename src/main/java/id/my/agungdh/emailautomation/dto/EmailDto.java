@@ -5,8 +5,8 @@ import java.util.List;
 public record EmailDto(
         String id,
         String subject,
-        List<String> labels,     // label Gmail (INBOX, user labels, dsb.)
-        long internalDateMs,     // epoch millis (UTC) dari Gmail
-        List<String> deliveredTo, // daftar nilai header Delivered-To (jika ada)
-        List<String> plusTags     // tag hasil ekstraksi dari alamat model nama+tag@domain
+        List<String> labels,     // nama label Gmail
+        long internalDateMs,     // epoch millis (UTC)
+        List<String> deliveredTo,
+        List<String> plusTags    // tag dari alamat model nama+tag@domain
 ) {}
