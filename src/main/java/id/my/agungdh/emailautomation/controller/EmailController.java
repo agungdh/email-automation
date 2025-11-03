@@ -16,8 +16,8 @@ public class EmailController {
         this.emailService = emailService;
     }
 
-    @GetMapping("/api/emails/last-week")
-    public List<EmailDto> lastWeek() throws Exception {
-        return emailService.getLastWeekEmails();
+    @GetMapping("/api/emails/last-24h")
+    public List<EmailDto> last24h() throws Exception {
+        return emailService.getLast24hEmails();
     }
 }
