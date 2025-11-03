@@ -20,4 +20,4 @@ jobs:
         distribution: 'liberica'
         cache: maven
     - name: Build with Maven
-      run: ./mvnw package
+      run: ./mvnw -B -ntp -DskipTests package
